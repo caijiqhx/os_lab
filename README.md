@@ -1,3 +1,3 @@
-# ucore os lab
+# os lab
 
-> NKU OS lab
+> NKU OS lab based on THU ucore
