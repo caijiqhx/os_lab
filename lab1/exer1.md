@@ -169,9 +169,9 @@ totarget = $(addprefix $(BINDIR)$(SLASH),$(1))
 
    后面的进行的操作就是反汇编到文件，以及输出符号表通过 sed 命令处理后输出到文件。
 
-ucore.img 的依赖文件生成后即执行后面的指令：
+至此，ucore.img 的依赖文件就绪，开始执行后面的指令：
 
-\$(V) 即 '@'，表示在执行命令时不会输出命令，'\$@' 表示目标文件即 ucore.img ， dd 命令创建了一个大小为 10000×512 字节的空文件，然后将 bootblock 从头复制到目标文件，将 kernel 跳过第一块复制到后续的块中。
+\$(V) 即 '@'，表示在执行命令时不会输出命令，'\$@' 表示目标文件即 ucore.img ， dd 命令创建了一个大小为 10000×512 字节的空文件，然后将 bootblock 从头复制到目标文件，前面已经看到了 bootblock 文件大小为 492 bytes，仅占用了第一个块，最后将 kernel 跳过第一块复制到后续的块中。
 
 > dd 命令参数
 >
@@ -179,3 +179,30 @@ ucore.img 的依赖文件生成后即执行后面的指令：
 > - count=n 表示读取指定的区块数，ibs 块的默认大小为 512 字节
 > - conv=notrunc 指定转换文件的方式，notrunc 表示不截断输出
 > - seek=n 表示输出时跳过的区块数
+
+## Q2: 一个被系统认为是符合规范的硬盘主引导扇区的特征是什么?
+
+符合规范的硬盘主引导扇区即大小为 512bytes，且最后两个字节为 0x55AA 的一个硬盘扇区。
+
+生成主引导扇区文件 bootblock 的最后一步是用 sign 工具处理，查看其源代码：
+
+```C
+printf("'%s' size: %lld bytes\n", argv[1], (long long)st.st_size);
+if (st.st_size > 510) {
+   fprintf(stderr, "%lld >> 510!!\n", (long long)st.st_size);
+   return -1;
+}
+char buf[512];
+memset(buf, 0, sizeof(buf));
+FILE *ifp = fopen(argv[1], "rb");
+int size = fread(buf, 1, st.st_size, ifp);
+if (size != st.st_size) {
+   fprintf(stderr, "read '%s' error, size is %d.\n", argv[1], size);
+   return -1;
+}
+fclose(ifp);
+buf[510] = 0x55;
+buf[511] = 0xAA;
+```
+
+要求可执行文件的大小不大于 510bytes，在 511，512 两个字节加上 0x55AA 后，它就是一个符合规范的硬盘主引导扇区。
