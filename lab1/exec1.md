@@ -53,8 +53,36 @@ totarget = $(addprefix $(BINDIR)$(SLASH),$(1))
 
 所以最后赋值给 UCOREIMG 的值为 bin/ucore.img，即目标镜像文件。
 
-可以看到镜像的依赖有 bootblock 、kernel，依赖生成后，执行下面的命令。
+可以看到镜像的依赖有 bootblock 、kernel，依赖生成后才执行下面的命令。下面查看依赖的相关代码。
 
-\$(V) 即 '@'，表示在执行命令时不会输出命令，'\$@' 表示目标文件即 ucore.img ， dd 命令创建了一个大小为 10000×512 字节的空文件，然后将 bootblock 赋值到文件的第一个块，将 kernel 跳过第一块复制到后续的块中。
+1. bootblock
 
-> 这里看到一个 `dd` 命令参数 `conv=notrunc`，[参考](https://stackoverflow.com/questions/20526198/why-using-conv-notrunc-when-cloning-a-disk-with-dd) > </br>大概就是： notrunc is only important to prevent truncation when writing into a file.
+   ```makefile
+   # create bootblock
+   bootfiles = $(call listf_cc,boot)
+   $(foreach f,$(bootfiles),$(call cc_compile,$(f),$(CC),$(CFLAGS) -Os -nostdinc))
+
+   bootblock = $(call totarget,bootblock)
+
+   $(bootblock): $(call toobj,$(bootfiles)) | $(call totarget,sign)
+   	@echo + ld $@
+   	$(V)$(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 $^ -o $(call toobj,bootblock)
+   	@$(OBJDUMP) -S $(call objfile,bootblock) > $(call asmfile,bootblock)
+   	@$(OBJCOPY) -S -O binary $(call objfile,bootblock) $(call outfile,bootblock)
+   	@$(call totarget,sign) $(call outfile,bootblock) $(bootblock)
+   $(call create_target,bootblock)
+   ```
+
+   这里的宏定义看起来很复杂，通过 warning 函数输出对应变量的方式确定文件名。
+   首先 bootblock 依赖于 obj/boot/bootasm.o 、obj/boot/bootmain.o 和 bin/sign 三个文件：
+
+   1.
+
+\$(V) 即 '@'，表示在执行命令时不会输出命令，'\$@' 表示目标文件即 ucore.img ， dd 命令创建了一个大小为 10000×512 字节的空文件，然后将 bootblock 从头复制到目标文件，将 kernel 跳过第一块复制到后续的块中。
+
+> dd 命令参数
+>
+> - if/of 输入/输出文件
+> - count=n 表示读取指定的区块数，ibs 块的默认大小为 512 字节
+> - conv=notrunc 指定转换文件的方式，notrunc 表示不截断输出
+> - seek=n 表示输出时跳过的区块数
