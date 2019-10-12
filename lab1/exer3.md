@@ -43,75 +43,80 @@ BIOS 将通过读取硬盘主引导扇区到内存，并转跳到对应内存中
 
 3. 初始化 GDT 表：
 
-   [段描述符的格式](https://wiki.osdev.org/Global_Descriptor_Table)如下：
+   > 实模式下的寻址方式：
+   > cs<<4 + ip
+   > 保护模式下的寻址方式：
+   > base(index(cs)) + eip
 
-   ![GDT 格式](http://116.62.148.220/image/gdt1.png)
+[段描述符的格式](https://wiki.osdev.org/Global_Descriptor_Table)如下：
 
-   1. 段基地址(base)：规定线性空间中段的起始地址，32 位长。
-   2. 段界限(limit)：规定段的大小，20 位长，可以以字节或 4K 字节为单位。
-   3. 段属性：描述各种性质，在格式中的 Flags 和 Access Byte 部分，具体结构如下：
+![GDT 格式](http://116.62.148.220/image/gdt1.png)
 
-      ![flag&access](http://116.62.148.220/image/gdt2.png)
+1.  段基地址(base)：规定线性空间中段的起始地址，32 位长。
+2.  段界限(limit)：规定段的大小，20 位长，可以以字节或 4K 字节为单位。
+3.  段属性：描述各种性质，在格式中的 Flags 和 Access Byte 部分，具体结构如下：
 
-      - Pr: 段存在位，对于所有可用段必置 1。
-      - Privi: 2 位，控制权限 0~3。
-      - 1: 此位为 1 表示为数据段或代码段，为 0 则表示是一个系统段
-      - Ex: 可执行位，即数据段为 0，代码段为 1。
-      - DC: Direction/Conforming 位
-        - 对于数据段，0 表示向上生长，对应可访问地址位 (base~base+limit)，1 表示向下生长，对应可访问地址为 (base+limit~MAX_ADDR)
-        - 对于代码段，0 表示只能被同权限执行，1 表示一致性代码段，即可以从低特权级转移到该段执行。
-      - RW: 可读/可写位，对于数据段，永远可读，此位表示是否可写；对代码段，永远不可写，此位表示是否可读。
-      - Ac: 设置为 0 即可，访问段时，CPU 设为 1。
-      - Gr: 粒度值，0 表示 limit 单位为 byte，1 表示 limit 单位为 4KB （一页）。
-      - Sz: size 位，0 表示为 16 位，1 表示 32 位。
-      - Sz 右一位: 在 x86_64 中指明为 64 位描述符，此时的 Sz 值应为 0。
+    ![flag&access](http://116.62.148.220/image/gdt2.png)
 
-   GDT (Global Descriptor Table)，全局描述符表是一个保存多个段描述符的“数组”，其起始地址保存在全局描述符表寄存器 GDTR 中。GDTR 长 48 位，其中高 32 位为基地址，低 16 位为段界限。GDTR 中的段界限以字节为单位。对于含有 N 个描述符的描述符表的段界限通常可设为 8\*N-1。
+    - Pr: 段存在位，对于所有可用段必置 1。
+    - Privi: 2 位，控制权限 0~3。
+    - 1: 此位为 1 表示为数据段或代码段，为 0 则表示是一个系统段
+    - Ex: 可执行位，即数据段为 0，代码段为 1。
+    - DC: Direction/Conforming 位
+      - 对于数据段，0 表示向上生长，对应可访问地址位 (base~base+limit)，1 表示向下生长，对应可访问地址为 (base+limit~MAX_ADDR)
+      - 对于代码段，0 表示只能被同权限执行，1 表示一致性代码段，即可以从低特权级转移到该段执行。
+    - RW: 可读/可写位，对于数据段，永远可读，此位表示是否可写；对代码段，永远不可写，此位表示是否可读。
+    - Ac: 设置为 0 即可，访问段时，CPU 设为 1。
+    - Gr: 粒度值，0 表示 limit 单位为 byte，1 表示 limit 单位为 4KB （一页）。
+    - Sz: size 位，0 表示为 16 位，1 表示 32 位。
+    - Sz 右一位: 在 x86_64 中指明为 64 位描述符，此时的 Sz 值应为 0。
 
-   段选择子，即用于定位段描述符表中表项的索引。结构如下：
+GDT (Global Descriptor Table)，全局描述符表是一个保存多个段描述符的“数组”，其起始地址保存在全局描述符表寄存器 GDTR 中。GDTR 长 48 位，其中高 32 位为基地址，低 16 位为段界限。GDTR 中的段界限以字节为单位。对于含有 N 个描述符的描述符表的段界限通常可设为 8\*N-1。
 
-   ```
-   |   1   |     0    |  字节
-   |7654321076543 2 10|  比特
-   |-------------|-|--|  占位
-   |    INDEX    |T|R |  含义
-   |             |I|P |
-   |             | |L |
-   ```
+段选择子，即用于定位段描述符表中表项的索引。结构如下：
 
-   - index: 在 GDT 或 LDT 中的索引号，可见一个 GDT 表中最多 $2^{13}$ 个表项。
-   - TI: 0 表示 GDT，1 表示 LDT。
-   - RPL: 请求特权级。
+```
+|   1   |     0    |  字节
+|7654321076543 2 10|  比特
+|-------------|-|--|  占位
+|    INDEX    |T|R |  含义
+|             |I|P |
+|             | |L |
+```
 
-   > Q2: 如何初始化 GDT 表?
+- index: 在 GDT 或 LDT 中的索引号，可见一个 GDT 表中最多 $2^{13}$ 个表项。
+- TI: 0 表示 GDT，1 表示 LDT。
+- RPL: 请求特权级。
 
-   ```assembly
-   # asm.h
-   #define SEG_NULLASM                                             \
-       .word 0, 0;                                                 \
-       .byte 0, 0, 0, 0
+> Q2: 如何初始化 GDT 表?
 
-   #define SEG_ASM(type,base,lim)                                  \
-       .word (((lim) >> 12) & 0xffff), ((base) & 0xffff);          \
-       .byte (((base) >> 16) & 0xff), (0x90 | (type)),             \
-           (0xC0 | (((lim) >> 28) & 0xf)), (((base) >> 24) & 0xff)
+```assembly
+# asm.h
+#define SEG_NULLASM                                             \
+    .word 0, 0;                                                 \
+    .byte 0, 0, 0, 0
 
-   # bootstrap.S
-   # Bootstrap GDT
-   .p2align 2                                          # force 4 byte alignment
-   gdt:
-       SEG_NULLASM                                     # null seg GDT表的第一项不能被使用，因此置 0
-       SEG_ASM(STA_X|STA_R, 0x0, 0xffffffff)           # code seg for bootloader and kernel
-       SEG_ASM(STA_W, 0x0, 0xffffffff)                 # data seg for bootloader and kernel
+#define SEG_ASM(type,base,lim)                                  \
+    .word (((lim) >> 12) & 0xffff), ((base) & 0xffff);          \
+    .byte (((base) >> 16) & 0xff), (0x90 | (type)),             \
+        (0xC0 | (((lim) >> 28) & 0xf)), (((base) >> 24) & 0xff)
 
-   gdtdesc:
-       .word 0x17                                      # sizeof(gdt) - 1
-       .long gdt                                       # address gdt
+# bootstrap.S
+# Bootstrap GDT
+.p2align 2                                          # force 4 byte alignment
+gdt:
+    SEG_NULLASM                                     # null seg GDT表的第一项不能被使用，因此置 0
+    SEG_ASM(STA_X|STA_R, 0x0, 0xffffffff)           # code seg for bootloader and kernel
+    SEG_ASM(STA_W, 0x0, 0xffffffff)                 # data seg for bootloader and kernel
 
-   lgdt gdtdesc                                        # 加载 GDT 表
-   ```
+gdtdesc:
+    .word 0x17                                      # sizeof(gdt) - 1
+    .long gdt                                       # address gdt
 
-   以上定义了一个含有三个表项的 GDT，通过 ldgt 命令加载，传入 gdt 表段界限（8\*N-1）和 gdt 的地址。由此初始化了 GDT 表。
+lgdt gdtdesc                                        # 加载 GDT 表
+```
+
+以上定义了一个含有三个表项的 GDT，通过 ldgt 命令加载，传入 gdt 表段界限（8\*N-1）和 gdt 的地址。由此初始化了 GDT 表。
 
 4. 使能，进入保护模式
 
