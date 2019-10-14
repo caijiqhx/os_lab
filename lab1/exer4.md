@@ -98,7 +98,8 @@ readseg(uintptr_t va, uint32_t count, uint32_t offset) {
     uintptr_t end_va = va + count;
 
     // round down to sector boundary
-    // 向下舍入到扇区边界 ??? 因为readsect函数读的是整个扇区，那么为了确保读的数据准确地在对应地址，舍入到扇区边界，多读了数据。
+    // 向下舍入到扇区边界
+    // 因为readsect函数读的是整个扇区，那么为了确保读的数据准确地在对应地址，舍入到扇区边界。不过实际运行中应该并没用到。
     va -= offset % SECTSIZE;
 
     // translate from bytes to sectors; kernel starts at sector 1
