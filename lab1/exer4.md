@@ -8,6 +8,7 @@ bootasm.S 和 bootmain.c 构成了一个 bootloader，练习 3 已经分析了 b
 > - CHS (Cylinder-head-sector) : 即以柱面-磁头-扇区的定址方式。
 >
 > 两种方式的换算 #lba = (#c \* H + #h) \* S + #s - 1
+>
 > #c、#h、#s 分别是柱面、磁头、扇区的编号，#lba 为逻辑区块编号，H 为每个磁柱的磁头数，S 为每磁道的扇区数。
 >
 > 两种数据传输方式：
