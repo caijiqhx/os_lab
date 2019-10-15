@@ -11,6 +11,8 @@
 
 #define TICK_NUM 100
 
+volatile size_t ticks;
+
 static void print_ticks() {
     cprintf("%d ticks\n",TICK_NUM);
 #ifdef DEBUG_GRADE
@@ -46,6 +48,20 @@ idt_init(void) {
       *     You don't know the meaning of this instruction? just google it! and check the libs/x86.h to know more.
       *     Notice: the argument of lidt is idt_pd. try to find it!
       */
+    extern uintptr_t __vectors[];
+    int i;
+    for(i = 0; i < sizeof(idt) / sizeof(struct gatedesc); i++ ) {
+        if(i <= 31){
+            // 前 32 个设置为 exception/traps
+            SETGATE(idt[i], 1, GD_KTEXT, __vectors[i], DPL_KERNEL);
+        }else {
+            // 后面的设置为 interrupt
+            SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
+        }
+    }
+    // 从trap.h 看到 系统调用对应是 0x80，系统调用应该对应用户态的软件权限
+    SETGATE(idt[T_SYSCALL], 0, GD_KTEXT, __vectors[i], DPL_USER);
+    lidt(&idt_pd);
 }
 
 static const char *
@@ -147,6 +163,11 @@ trap_dispatch(struct trapframe *tf) {
          * (2) Every TICK_NUM cycle, you can print some info using a funciton, such as print_ticks().
          * (3) Too Simple? Yes, I think so!
          */
+        ticks++;
+        if( ticks == TICK_NUM ) {
+            ticks = 0;
+            print_ticks();
+        }
         break;
     case IRQ_OFFSET + IRQ_COM1:
         c = cons_getc();
