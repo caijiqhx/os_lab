@@ -106,7 +106,7 @@ void idt_init(void) {
 要补全的位置在 trap_dispatch 函数中，很简单，根据注释写就行：
 
 ```C
-// 注释提示可以使用类似于 ./kern/driver/clock.c 中的 ticks
+// ./kern/driver/clock.c 中的 ticks
 volatile size_t ticks;
 
 ticks++;
