@@ -30,3 +30,5 @@ void print_stackframe(void) {
 ebp:0x00007bf8 eip:0x00007d72 args:0xc031fcfa 0xc08ed88e 0x64e4d08e 0xfa7502a8
     <unknow>: -- 0x00007d71 --
 ```
+
+最底层应该就是 bootmain 函数，bootasm.S 中设置 ebp、esp 后直接调用，并没有传参。此时 ebp 为 0x7bf8。
