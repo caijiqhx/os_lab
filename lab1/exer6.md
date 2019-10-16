@@ -95,7 +95,7 @@ void idt_init(void) {
             SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
         }
     }
-    // 从trap.h 看到 系统调用对应是 0x80，系统调用应该对应用户态的软件权限
+    // 从trap.h 看到 系统调用对应是 0x80，系统调用应该对应用户态权限
     SETGATE(idt[T_SYSCALL], 0, GD_KTEXT, __vectors[i], DPL_USER);
     lidt(&idt_pd);
 }

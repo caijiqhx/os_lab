@@ -61,6 +61,8 @@ idt_init(void) {
     }
     // 从trap.h 看到 系统调用对应是 0x80，系统调用应该对应用户态的软件权限
     SETGATE(idt[T_SYSCALL], 0, GD_KTEXT, __vectors[i], DPL_USER);
+    // 从用户态到内核态的trap需要设置为3
+    SETGATE(idt[T_SWITCH_TOK], 1, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
     lidt(&idt_pd);
 }
 
@@ -150,10 +152,13 @@ print_regs(struct pushregs *regs) {
     cprintf("  eax  0x%08x\n", regs->reg_eax);
 }
 
+// struct trapframe switchk2u, *switchu2k;
+
 /* trap_dispatch - dispatch based on what type of trap occurred */
 static void
 trap_dispatch(struct trapframe *tf) {
     char c;
+
 
     switch (tf->tf_trapno) {
     case IRQ_OFFSET + IRQ_TIMER:
@@ -179,8 +184,14 @@ trap_dispatch(struct trapframe *tf) {
         break;
     //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
     case T_SWITCH_TOU:
+        tf->tf_cs = USER_CS;
+        tf->tf_ds = tf->tf_es = USER_DS;
+        tf->tf_eflags |= FL_IOPL_MASK;
+        break;
     case T_SWITCH_TOK:
-        panic("T_SWITCH_** ??\n");
+        tf->tf_cs = KERNEL_CS;
+        tf->tf_ds = tf->tf_es = tf->tf_ss = KERNEL_DS;
+        tf->tf_eflags &= ~FL_IOPL_MASK;
         break;
     case IRQ_OFFSET + IRQ_IDE1:
     case IRQ_OFFSET + IRQ_IDE2:
