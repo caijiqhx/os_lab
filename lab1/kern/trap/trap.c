@@ -208,7 +208,7 @@ trap_dispatch(struct trapframe *tf) {
             lab1_switch_to_user();
             print_trapframe(tf);
         }else if( c == '0' ){
-            cprintf("switch to kernel 333\n");
+            cprintf("switch to kernel 000\n");
             lab1_switch_to_kernel();
             print_trapframe(tf);
         }
