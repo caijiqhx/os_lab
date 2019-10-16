@@ -80,7 +80,7 @@ struct trapframe {
    static void lab1_switch_to_kernel(void) {
        asm volatile (
            "int %0\n"
-           "movl %%ebp, %%ebp\n"
+           "movl %%ebp, %%esp\n"
            :: "i"(T_SWITCH_TOK)
        );
    }
@@ -97,3 +97,26 @@ struct trapframe {
    ```
 
 由此，内核态-->用户态-->内核态的过程实现。执行 `make grade` 后正确。
+
+## Q2: 用键盘实现用户模式内核模式切换。具体目标是：“键盘输入 3 时切换到用户模式，键盘输入 0 时切换到内核模式”。
+
+实现了之前的问题，这个就可以用上面的函数来实现。也就是我们把 ./kern/init/init.c 中的 switch_to_user、switch_to_kernel 添加到 trap.c 中并在 trap_dispatch 中的 `case IRQ_OFFSET + IRQ_KBD` 中调用这两个函数就行了。
+
+emmm，看起来这样就行了，但是改完代码后，运行 make qemu，按 3 确实执行了切换到用户态的函数，然后就停住了。。。应该是切换到用户态之后没有命令执行了。所以我直接让它切换回内核态了。。。
+
+```C
+ case IRQ_OFFSET + IRQ_KBD:
+    c = cons_getc();
+    if( c == '3' ){
+        cprintf("switch to user 333\n");
+        lab1_switch_to_user();
+        print_trapframe(tf);
+        lab1_switch_to_kernel();
+    }else if( c == '0' ){
+        cprintf("switch to kernel 000\n");
+        lab1_switch_to_kernel();
+        print_trapframe(tf);
+    }
+    cprintf("kbd [%03d] %c\n", c, c);
+    break;
+```

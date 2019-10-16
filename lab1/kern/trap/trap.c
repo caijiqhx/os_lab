@@ -207,6 +207,7 @@ trap_dispatch(struct trapframe *tf) {
             cprintf("switch to user 333\n");
             lab1_switch_to_user();
             print_trapframe(tf);
+            lab1_switch_to_kernel();
         }else if( c == '0' ){
             cprintf("switch to kernel 000\n");
             lab1_switch_to_kernel();
@@ -216,6 +217,7 @@ trap_dispatch(struct trapframe *tf) {
         break;
     //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
     case T_SWITCH_TOU:
+        cprintf("switching to user\n");
         tf->tf_cs = USER_CS;
         tf->tf_ds = tf->tf_es = USER_DS;
         tf->tf_eflags |= FL_IOPL_MASK;
