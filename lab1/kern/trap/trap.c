@@ -154,6 +154,29 @@ print_regs(struct pushregs *regs) {
 
 // struct trapframe switchk2u, *switchu2k;
 
+static void
+lab1_switch_to_user(void) {
+    //LAB1 CHALLENGE 1 : TODO
+    asm volatile (
+        "movl %%esp,%%eax\n"
+        "pushl %0\n"
+        "pushl %%eax\n"
+        "int %1\n"
+        :: "i"(USER_DS), "i"(T_SWITCH_TOU)
+    );
+}
+
+static void
+lab1_switch_to_kernel(void) {
+    //LAB1 CHALLENGE 1 :  TODO
+    asm volatile (
+        "int %0\n"
+        "movl %%ebp, %%esp\n" //这里开始写成 ebp 了。。。太蠢了
+        :
+        : "i"(T_SWITCH_TOK)
+    );
+}
+
 /* trap_dispatch - dispatch based on what type of trap occurred */
 static void
 trap_dispatch(struct trapframe *tf) {
@@ -168,11 +191,11 @@ trap_dispatch(struct trapframe *tf) {
          * (2) Every TICK_NUM cycle, you can print some info using a funciton, such as print_ticks().
          * (3) Too Simple? Yes, I think so!
          */
-        ticks++;
-        if( ticks == TICK_NUM ) {
-            ticks = 0;
-            print_ticks();
-        }
+        // ticks++;
+        // if( ticks == TICK_NUM ) {
+        //     ticks = 0;
+        //     print_ticks();
+        // }
         break;
     case IRQ_OFFSET + IRQ_COM1:
         c = cons_getc();
@@ -180,6 +203,15 @@ trap_dispatch(struct trapframe *tf) {
         break;
     case IRQ_OFFSET + IRQ_KBD:
         c = cons_getc();
+        if( c == '3' ){
+            cprintf("switch to user 333\n");
+            lab1_switch_to_user();
+            print_trapframe(tf);
+        }else if( c == '0' ){
+            cprintf("switch to kernel 333\n");
+            lab1_switch_to_kernel();
+            print_trapframe(tf);
+        }
         cprintf("kbd [%03d] %c\n", c, c);
         break;
     //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
