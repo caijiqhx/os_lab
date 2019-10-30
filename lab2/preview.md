@@ -205,3 +205,146 @@ page_init(void) {
     }
 }
 ```
+
+## 物理内存页分配算法
+
+根据以上的基础知识，我们就可以实现 first-fit 算法，完成练习 1，具体过程见 exer1.md。
+
+## 实现分页机制
+
+### 段页式管理的基本概念
+
+逻辑地址---Segmentation-->线性地址---Paging-->物理地址。
+
+线性地址分为 Directory、Table、Offset 三部分，通过二级页表实现，一级页表的起始地址存放在 cr3 寄存器。
+
+<center><img src="https://chyyuu.gitbooks.io/ucore_os_docs/lab2_figs/image004.png" /><brs>
+
+<img src="https://chyyuu.gitbooks.io/ucore_os_docs/lab2_figs/image006.png" /></center>
+
+### 系统执行中地址映射的三个阶段
+
+lab1 中只是简单的段映射，虚拟地址和物理地址都是从 0x100000 开始， vir addr = linear addr = phy addr。
+
+lab2 中在 ./tools/kernel.ld 中定义了起始虚拟地址 0xC0100000，入口由 kern_init 改为 kern_entry，对应的物理地址同样是 0x100000 开始。
+
+```C
+ENTRY(kern_entry)
+
+SECTIONS {
+    /* Load the kernel at this address: "." means the current address */
+    . = 0xC0100000;
+
+    .text : {
+        *(.text .stub .text.* .gnu.linkonce.t.*)
+    }
+
+```
+
+可见 lab1 和 lab2 在地址映射机制上的不同，而 lab2 在不同阶段的地址映射机制也不尽相同。
+
+1. 第一阶段（开启保护模式，创建启动段表）是 bootloader 阶段，即从 bootasm.S 的 start 函数到执行 ucore 的 kern_entry 之前：
+
+   vir addr = linear addr = phy addr
+
+2. 第二阶段（创建初始页目录表，开启分页模式）从 kern_entry 函数开始，到 pmm_init 函数被执行之前。
+
+   在 ./kern/init/entry.S 中设置好了页目录表和页表项，将 0~4M 的线性地址一一映射到物理地址
+
+   ```assembly
+   __boot_pgdir:
+   .globl __boot_pgdir
+       # map va 0 ~ 4M to pa 0 ~ 4M (temporary)
+       .long REALLOC(__boot_pt1) + (PTE_P | PTE_U | PTE_W)
+       .space (KERNBASE >> PGSHIFT >> 10 << 2) - (. - __boot_pgdir) # pad to PDE of KERNBASE
+       # map va KERNBASE + (0 ~ 4M) to pa 0 ~ 4M
+       .long REALLOC(__boot_pt1) + (PTE_P | PTE_U | PTE_W)
+       .space PGSIZE - (. - __boot_pgdir) # pad to PGSIZE
+
+   # 1024 × 4KB
+   .set i, 0
+   __boot_pt1:
+   .rept 1024
+       .long i * PGSIZE + (PTE_P | PTE_W)
+       .set i, i + 1
+   .endr
+   ```
+
+   首先将页目录表的起始地址填入 cr3，然后将 cr0 的 CR0_PG 置位，计算机进入了分页模式。
+
+   此时的地址映射机制为：
+
+   - 0~4MB: vir addr = linear addr = phy addr
+   - KERNBASE(0xC0000000) + 0~4MB: vir addr = linear addr = phy addr + KERNBASE(0xC0000000)
+
+   这仅比第一阶段增加了内核基址的偏移，作为范围仅是 0~4M。此时的 EIP 还在 0~4M 的低虚拟地址运行，接下来需要一个跳转来使内核跳转到高虚拟地址：
+
+   ```assembly
+   # update eip
+   # now, eip = 0x1.....
+   leal next, %eax
+   # set eip = KERNBASE + 0x1.....
+   jmp *%eax
+   ```
+
+   跳转完成后，将 boot_pgdir 的第一个页目录表项清零来取消之前的映射关系。
+
+   ```assembly
+   # unmap va 0 ~ 4M, it's temporary mapping
+   xorl %eax, %eax
+   movl %eax, __boot_pgdir
+   ```
+
+   最后，第二阶段的虚拟地址 0~4M 的地址映射机制被设置为：vir addr = linear addr = phy addr + KERNBASE。第二阶段主要就是把 EIP 迁移到高虚拟地址，到但是只映射了 0~4M。
+
+3. 第三阶段（完善段表和页表）pmm_init 函数补充页目录表项，从 0~4M 扩充到 0~KMEMSIZE。然后更新了段映射机制，使用了新的段表，包括内核态和用户态的代码段和数据段描述符以及 TSS 段描述符。
+
+   这时就形成了我们期望的虚拟地址、线性地址以及物理地址的映射关系：vir addr = linear addr = phy addr + 0xC000000
+
+### 建立虚拟页和物理页帧的地址映射关系
+
+pmm_init 是内存管理的总体控制函数，主要工作包括：
+
+1. init_pmm_manager: 初始化物理内存页管理器框架，即将 default_pmm.c 中定义的 default_pmm_manager 赋值给 pmm_manager。初始化之后的 pmm 就可以分配释放物理内存。同时应用了内存分配算法。
+2. page_init: 初始化管理空闲内存的双向链表 free_list。
+3. check_alloc_page: 调用 pmm_manager->check 检查物理内存也分配算法
+4. boot_map_segment: 建立二级页表，使能分页机制
+5. gdt_init: 设置新的全局段描述符表
+6. check_boot_pgdir: 检查页表
+7. 通过自映射机制完成页表的打印输出
+
+建立二级页表
+
+整个页目录表和页表所占空间大小取决于二级页表要管理和映射的物理页数，在 ucore 中定义了内存大小为 `KMEMSIZE = 0x38000000`，即 896MB。计算一下，物理页大小为 4KB，则我们需要以 0x38000 个物理页管理这些内存。
+
+完成了前两个阶段的地址映射后，为了把 0~KMEMSIZE 的物理地址一一映射到页目录项和页表项的内容，其大致流程如下：
+
+1. 指向页目录表项的指针已存储在 boot_pgdir 变量中。
+2. 映射 0~4MB 的首个页表已填充好。
+3. 调用 boot_map_segment 函数进一步建立映射关系，具体过程以页为单位进行设置，即 linear addr = phy addr + KERNBASE
+
+   ```C
+   //boot_map_segment - setup&enable the paging mechanism
+   // parameters
+   //  la:   linear address of this memory need to map (after x86 segment map) 32位 线性地址
+   //  size: memory size
+   //  pa:   physical address of this memory 32位 物理地址
+   //  perm: permission of this memory
+   static void
+   boot_map_segment(pde_t *pgdir, uintptr_t la, size_t size, uintptr_t pa, uint32_t perm) {
+       assert(PGOFF(la) == PGOFF(pa));
+       size_t n = ROUNDUP(size + PGOFF(la), PGSIZE) / PGSIZE;
+       la = ROUNDDOWN(la, PGSIZE);
+       pa = ROUNDDOWN(pa, PGSIZE);
+       for (; n > 0; n --, la += PGSIZE, pa += PGSIZE) {
+           pte_t *ptep = get_pte(pgdir, la, 1);
+           assert(ptep != NULL);
+           *ptep = pa | PTE_P | perm;
+       }
+   }
+   ```
+
+   页目录表项内容 = (页表起始地址 & ~0x0FFF) | PTE_U | PTE_W | PTE_P
+   页表项内容 = (pa & ~0x0FFF) | PTE_P | PTE_W
+
+   boot_map_segment 完成映射的函数就是 get_pte，这也是练习 2 要修改的函数。根据注释可以实现即可。

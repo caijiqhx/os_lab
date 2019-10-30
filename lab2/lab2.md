@@ -20,3 +20,42 @@
 #define le2page(le, member)                 \
     to_struct((le), struct Page, member)
 ```
+
+## 2019-10-30:23:31
+
+练习 2 完成。
+
+主要是要先了解分页机制和 ucore 中进行地址映射的几个阶段。见 preview.md。
+
+要实现的函数就是第三个阶段的 boot_map_segment 函数调用的 get_pte。
+
+ucore 的内核虚拟地址空间如下：
+
+```
+/* *
+ * Virtual memory map:                                          Permissions
+ *                                                              kernel/user
+ *
+ *     4G ------------------> +---------------------------------+
+ *                            |                                 |
+ *                            |         Empty Memory (*)        |
+ *                            |                                 |
+ *                            +---------------------------------+ 0xFB000000
+ *                            |   Cur. Page Table (Kern, RW)    | RW/-- PTSIZE
+ *     VPT -----------------> +---------------------------------+ 0xFAC00000
+ *                            |        Invalid Memory (*)       | --/--
+ *     KERNTOP -------------> +---------------------------------+ 0xF8000000
+ *                            |                                 |
+ *                            |    Remapped Physical Memory     | RW/-- KMEMSIZE
+ *                            |                                 |
+ *     KERNBASE ------------> +---------------------------------+ 0xC0000000
+ *                            |                                 |
+ *                            |                                 |
+ *                            |                                 |
+ *                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * (*) Note: The kernel ensures that "Invalid Memory" is *never* mapped.
+ *     "Empty Memory" is normally unmapped, but user programs may map pages
+ *     there if desired.
+ *
+ * */
+```

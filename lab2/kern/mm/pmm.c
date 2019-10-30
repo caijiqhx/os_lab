@@ -359,6 +359,21 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
     }
     return NULL;          // (8) return page table entry
 #endif
+    pde_t *pdep = &pgdir[PDX(la)];                          // 获取页目录项
+    if (!(*pdep & PTE_P)) {                                 // 判断页表项是否存在
+        struct Page *page;
+        if (!create || (page = alloc_page()) == NULL) {     // 不需要分配或分配失败
+            return NULL;
+        }
+        set_page_ref(page, 1);                              // 设置引用次数为 1
+        uintptr_t pa = page2pa(page);                       // 得到该页的物理地址
+        memset(KADDR(pa), 0, PGSIZE);                       // 初始化，清零
+        *pdep = pa & ~0x0FFF | PTE_P | PTE_W | PTE_U;       // 设置页目录表项，可读，可写，存在
+    }
+    // KADDR(PDE_ADDR(*pdep)) 由页目录项地址得到关联的页表物理地址，再转成虚拟地址
+    // PTX(la) 页表项的索引地址，即中 10 位
+    // 最后返回的是虚拟地址la对应的页表项入口地址
+    return &((pte_t *)KADDR(PDE_ADDR(*pdep)))[PTX(la)];
 }
 
 //get_page - get related Page struct for linear address la using PDT pgdir
