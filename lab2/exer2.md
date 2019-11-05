@@ -91,4 +91,6 @@ get_pte 返回的页表项在 boot_map_segment 中设置 `*ptep = pa | PTE_P | p
 
 在 lab3 的参考资料中提到了关于 Page Fault 异常处理，结合 lab1 中涉及的触发中断的流程：
 
-CPU 把产生异常的线性地址存储在 CR2 中，在当前内核栈保存当前被打断的程序现场，即依次压入当前被打断程序使用的 EFLAGS，CS，EIP，errorCode。页访问异常 page fault 的中断号是 14，以此查询 IDT 表找到中断服务入口，加载到 CS 和 EIP 寄存器中。还需要保存硬件没有保存的寄存器，将中断号压栈，再把 DS、ES 和其他通用寄存器都压栈。最后在 trap.c 的 trap 函数开始了中断服务例程的处理流程，大致调用关系为：trap--> trap_dispatch-->pgfault_handler-->do_pgfault。最后执行 do_pgfault 在 lab3 会要实现这个函数。
+CPU 把产生异常的线性地址存储在 CR2 中，在当前内核栈保存当前被打断的程序现场，即依次压入当前被打断程序使用的 EFLAGS，CS，EIP，errorCode。页访问异常 page fault 的中断号是 14，以此查询 IDT 表找到中断服务入口，加载到 CS 和 EIP 寄存器中。
+
+之后就是软件执行，需要保存硬件没有保存的寄存器，将中断号压栈，再把 DS、ES 和其他通用寄存器都压栈。最后在 trap.c 的 trap 函数开始了中断服务例程的处理流程，大致调用关系为：trap--> trap_dispatch-->pgfault_handler-->do_pgfault。最后执行 do_pgfault，在 lab3 会要实现这个函数。

@@ -307,7 +307,7 @@ pmm_init 是内存管理的总体控制函数，主要工作包括：
 
 1. init_pmm_manager: 初始化物理内存页管理器框架，即将 default_pmm.c 中定义的 default_pmm_manager 赋值给 pmm_manager。初始化之后的 pmm 就可以分配释放物理内存。同时应用了内存分配算法。
 2. page_init: 初始化管理空闲内存的双向链表 free_list。
-3. check_alloc_page: 调用 pmm_manager->check 检查物理内存也分配算法
+3. check_alloc_page: 调用 pmm_manager->check 检查物理内存页分配算法
 4. boot_map_segment: 建立二级页表，使能分页机制
 5. gdt_init: 设置新的全局段描述符表
 6. check_boot_pgdir: 检查页表
@@ -348,3 +348,36 @@ pmm_init 是内存管理的总体控制函数，主要工作包括：
    页表项内容 = (pa & ~0x0FFF) | PTE_P | PTE_W
 
    boot_map_segment 完成映射的函数就是 get_pte，这也是练习 2 要修改的函数。根据注释可以实现即可。
+
+4. 建立好一一映射的二级页表结构后，分页机制已初始化完毕。然后执行 gdt_init 函数后，新的段页式映射已经建立好了。
+
+最终的内核虚拟地址空间如下：
+
+```C
+/* *
+ * Virtual memory map:                                          Permissions
+ *                                                              kernel/user
+ *
+ *     4G ------------------> +---------------------------------+
+ *                            |                                 |
+ *                            |         Empty Memory (*)        |
+ *                            |                                 |
+ *                            +---------------------------------+ 0xFB000000
+ *                            |   Cur. Page Table (Kern, RW)    | RW/-- PTSIZE
+ *     VPT -----------------> +---------------------------------+ 0xFAC00000
+ *                            |        Invalid Memory (*)       | --/--
+ *     KERNTOP -------------> +---------------------------------+ 0xF8000000
+ *                            |                                 |
+ *                            |    Remapped Physical Memory     | RW/-- KMEMSIZE
+ *                            |                                 |
+ *     KERNBASE ------------> +---------------------------------+ 0xC0000000
+ *                            |                                 |
+ *                            |                                 |
+ *                            |                                 |
+ *                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ * (*) Note: The kernel ensures that "Invalid Memory" is *never* mapped.
+ *     "Empty Memory" is normally unmapped, but user programs may map pages
+ *     there if desired.
+ *
+ * */
+```

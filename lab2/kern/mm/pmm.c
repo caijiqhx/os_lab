@@ -419,6 +419,14 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
                                   //(6) flush tlb
     }
 #endif
+    if (*ptep & PTE_P) {                        // 检查页表项是否存在
+        struct Page *page = pte2page(*ptep);    // 找到 pte 相关联的页表
+        if (page_ref_dec(page) == 0) {          // 若自减为1，则释放页
+            free_page(page);
+        }
+        *ptep = 0;                              // 将页表项清0
+        tlb_invalidate(pgdir, la);              // 刷新TLB
+    }
 }
 
 //page_remove - free an Page which is related linear address la and has an validated pte
