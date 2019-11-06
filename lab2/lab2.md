@@ -29,6 +29,37 @@
 
 要实现的函数就是第三个阶段的 boot_map_segment 函数调用的 get_pte。
 
+## 2019-11-05:18:01
+
+练习 3 完成。
+
+要实现的就是 page_remove_pte。
+
+pte2page 宏实现了由页表项获取相应页，即以 pte 的前 20 位为页索引获取对应页：
+
+```C
+#define PTXSHIFT        12                      // offset of PTX in a linear address
+
+// page number field of address
+#define PPN(la) (((uintptr_t)(la)) >> PTXSHIFT)
+
+static inline struct Page *
+pa2page(uintptr_t pa) {
+    if (PPN(pa) >= npage) {
+        panic("pa2page called with invalid pa");
+    }
+    return &pages[PPN(pa)];
+}
+
+static inline struct Page *
+pte2page(pte_t pte) {
+    if (!(pte & PTE_P)) {
+        panic("pte2page called with invalid pte");
+    }
+    return pa2page(PTE_ADDR(pte));
+}
+```
+
 ucore 的内核虚拟地址空间如下：
 
 ```

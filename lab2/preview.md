@@ -305,13 +305,13 @@ SECTIONS {
 
 pmm_init 是内存管理的总体控制函数，主要工作包括：
 
-1. init_pmm_manager: 初始化物理内存页管理器框架，即将 default_pmm.c 中定义的 default_pmm_manager 赋值给 pmm_manager。初始化之后的 pmm 就可以分配释放物理内存。同时应用了内存分配算法。
-2. page_init: 初始化管理空闲内存的双向链表 free_list。
-3. check_alloc_page: 调用 pmm_manager->check 检查物理内存页分配算法
-4. boot_map_segment: 建立二级页表，使能分页机制
-5. gdt_init: 设置新的全局段描述符表
-6. check_boot_pgdir: 检查页表
-7. 通过自映射机制完成页表的打印输出
+8. init_pmm_manager: 初始化物理内存页管理器框架，即将 default_pmm.c 中定义的 default_pmm_manager 赋值给 pmm_manager。初始化之后的 pmm 就可以分配释放物理内存。同时应用了内存分配算法。
+9. page_init: 初始化管理空闲内存的双向链表 free_list。
+10. check_alloc_page: 调用 pmm_manager->check 检查物理内存页分配算法
+11. boot_map_segment: 建立二级页表，使能分页机制
+12. gdt_init: 设置新的全局段描述符表
+13. check_boot_pgdir: 检查页表
+14. 通过自映射机制完成页表的打印输出
 
 建立二级页表
 
@@ -319,37 +319,37 @@ pmm_init 是内存管理的总体控制函数，主要工作包括：
 
 完成了前两个阶段的地址映射后，为了把 0~KMEMSIZE 的物理地址一一映射到页目录项和页表项的内容，其大致流程如下：
 
-1. 指向页目录表项的指针已存储在 boot_pgdir 变量中。
-2. 映射 0~4MB 的首个页表已填充好。
-3. 调用 boot_map_segment 函数进一步建立映射关系，具体过程以页为单位进行设置，即 linear addr = phy addr + KERNBASE
+8. 指向页目录表项的指针已存储在 boot_pgdir 变量中。
+9. 映射 0~4MB 的首个页表已填充好。
+10. 调用 boot_map_segment 函数进一步建立映射关系，具体过程以页为单位进行设置，即 linear addr = phy addr + KERNBASE
 
-   ```C
-   //boot_map_segment - setup&enable the paging mechanism
-   // parameters
-   //  la:   linear address of this memory need to map (after x86 segment map) 32位 线性地址
-   //  size: memory size
-   //  pa:   physical address of this memory 32位 物理地址
-   //  perm: permission of this memory
-   static void
-   boot_map_segment(pde_t *pgdir, uintptr_t la, size_t size, uintptr_t pa, uint32_t perm) {
-       assert(PGOFF(la) == PGOFF(pa));
-       size_t n = ROUNDUP(size + PGOFF(la), PGSIZE) / PGSIZE;
-       la = ROUNDDOWN(la, PGSIZE);
-       pa = ROUNDDOWN(pa, PGSIZE);
-       for (; n > 0; n --, la += PGSIZE, pa += PGSIZE) {
-           pte_t *ptep = get_pte(pgdir, la, 1);
-           assert(ptep != NULL);
-           *ptep = pa | PTE_P | perm;
-       }
-   }
-   ```
+```C
+//boot_map_segment - setup&enable the paging mechanism
+// parameters
+//  la:   linear address of this memory need to map (after x86 segment map) 32位 线性地址
+//  size: memory size
+//  pa:   physical address of this memory 32位 物理地址
+//  perm: permission of this memory
+static void
+boot_map_segment(pde_t *pgdir, uintptr_t la, size_t size, uintptr_t pa, uint32_t perm) {
+    assert(PGOFF(la) == PGOFF(pa));
+    size_t n = ROUNDUP(size + PGOFF(la), PGSIZE) / PGSIZE;
+    la = ROUNDDOWN(la, PGSIZE);
+    pa = ROUNDDOWN(pa, PGSIZE);
+    for (; n > 0; n --, la += PGSIZE, pa += PGSIZE) {
+        pte_t *ptep = get_pte(pgdir, la, 1);
+        assert(ptep != NULL);
+        *ptep = pa | PTE_P | perm;
+    }
+}
+```
 
-   页目录表项内容 = (页表起始地址 & ~0x0FFF) | PTE_U | PTE_W | PTE_P
-   页表项内容 = (pa & ~0x0FFF) | PTE_P | PTE_W
+页目录表项内容 = (页表起始地址 & ~0x0FFF) | PTE_U | PTE_W | PTE_P
+页表项内容 = (pa & ~0x0FFF) | PTE_P | PTE_W
 
-   boot_map_segment 完成映射的函数就是 get_pte，这也是练习 2 要修改的函数。根据注释可以实现即可。
+boot_map_segment 完成映射的函数就是 get_pte，这也是练习 2 要修改的函数。根据注释可以实现即可。
 
-4. 建立好一一映射的二级页表结构后，分页机制已初始化完毕。然后执行 gdt_init 函数后，新的段页式映射已经建立好了。
+8.  建立好一一映射的二级页表结构后，分页机制已初始化完毕。然后执行 gdt_init 函数后，新的段页式映射已经建立好了。
 
 最终的内核虚拟地址空间如下：
 
@@ -381,3 +381,67 @@ pmm_init 是内存管理的总体控制函数，主要工作包括：
  *
  * */
 ```
+
+## 自映射机制
+
+boot_map_segment 函数建立了一一映射关系的页目录表项和页表项，映射关系为：
+
+vir addr (KERNBASE~KERNBASE+KMEMSIZE) = phy addr (0~KMEMSIZE)
+
+如果我们这时需要按虚拟地址的地址顺序显示整个页目录表和页表的内容，则要查找页目录表的页目录表项内容，根据页目录表项内容找到页表的物理地址，再转换成对应的虚地址，然后访问页表的虚地址，搜索整个页表的每个页目录项。
+
+把页目录表和页表放在一个连续的 4MB 虚拟地址空间中，并设置页目录表自身的虚地址<==>物理地址映射关系。这样在已知页目录表起始虚地址的情况下，通过连续扫描这特定的 4MB 虚拟地址空间，就很容易访问每个页目录表项和页表项内容。
+
+首先定义了一个常量 `VPT = 0xFAC00000`，其低 12 位和中 10 位为 0。在 pmm.c 中有以下代码：
+
+```C
+pte_t * const vpt = (pte_t *)VPT;
+// vpd 的高 10 位和中 10 位相等，都是十进制的 1003，即 vpd = 0xFAFEB000
+// 确保 vpd 的值就是目录页表项的起始虚地址，且 vpt 就是页目录表中第一个页目录表指向的页表的起始虚地址。
+pde_t * const vpd = (pde_t *)PGADDR(PDX(VPT), PDX(VPT), 0);
+
+
+// recursively insert boot_pgdir in itself
+// to form a virtual page table at virtual address VPT
+boot_pgdir[PDX(VPT)] = PADDR(boot_pgdir) | PTE_P | PTE_W;
+// boot_pgdir[1003]存储了 boot_pgdir 的物理地址，二级页表则再次以 boot_pgdir 页表查找，对应的物理地址恰好是 boot_pgdir 的物理地址。
+```
+
+## 建立段页式管理中的需要考虑的关键问题
+
+1. 如何在建立页表的过程中维护全局段描述符表（GDT）和页表的关系，确保 ucore 能够在各个时间段上都能正常寻址？
+
+   在建立页表的时候，此时还是链接时由 bootloader 生成的 GDT.在建立页表完成后，需要更新全局 GDT.这才真正开启了分页机制。
+
+2. 对于哪些物理内存空间需要建立页映射关系？
+
+   可用的物理空间，起始地址是 bss 段的起始地址。
+
+3. 具体的页映射关系是什么？
+
+   ```C
+   // +--------10------+-------10-------+---------12----------+
+   // | Page Directory |   Page Table   | Offset within Page  |
+   // |      Index     |     Index      |                     |
+   // +----------------+----------------+---------------------+
+   //  \--- PDX(la) --/ \--- PTX(la) --/ \---- PGOFF(la) ----/
+   //  \----------- PPN(la) -----------/
+   //
+   // The PDX, PTX, PGOFF, and PPN macros decompose linear addresses as shown.
+   // To construct a linear address la from PDX(la), PTX(la), and PGOFF(la),
+   // use PGADDR(PDX(la), PTX(la), PGOFF(la)).
+   ```
+
+4. 页目录表的起始地址设置在哪里？
+
+5. 页表的起始地址设置在哪里，需要多大空间？
+
+   页表的理论连续虚拟空间为 0xFAC00000 ~ 0xFB000000，大小为 4MB。有 1M 个 PTE，即可以映射 4GB 的地址空间。由于 ucore 的 KERNTOP 为 `vpt + 0xF8000000/0x1000*4 = 0xFAC00000 + 0xF8000*4 = 0xFAFE0000`
+
+6. 如何设置页目录表项的内容？
+
+   boot_pgdir[PDX(la)] = pa & ~0x0FFF | PTE_U | PTE_W | PTE_P;
+
+7. 如何设置页表项的内容？
+
+   通过 get_pte 函数。
