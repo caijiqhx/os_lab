@@ -218,9 +218,8 @@ page_init(void) {
 
 线性地址分为 Directory、Table、Offset 三部分，通过二级页表实现，一级页表的起始地址存放在 cr3 寄存器。
 
-<center><img src="https://chyyuu.gitbooks.io/ucore_os_docs/lab2_figs/image004.png" /><brs>
-
-<img src="https://chyyuu.gitbooks.io/ucore_os_docs/lab2_figs/image006.png" /></center>
+<center><img src="http://116.62.148.220:8888/lab2_figs/image004.png" /><brs>
+<img src="http://116.62.148.220:8888/lab2_figs/image006.png" /></center>
 
 ### 系统执行中地址映射的三个阶段
 

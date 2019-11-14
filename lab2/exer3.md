@@ -4,7 +4,7 @@
 
 page_remove_pte 的调用关系如下：
 
-<center><img src="https://chyyuu.gitbooks.io/ucore_os_docs/lab2_figs/image002.png" /></center>
+<center><img src="http://116.62.148.220:8888/lab2_figs/image002.png" /></center>
 
 根据 page_remove_pte 的注释实现：
 

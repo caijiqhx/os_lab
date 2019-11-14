@@ -4,7 +4,7 @@
 
 首先看给出的 get_pte 的调用图：
 
-<center><img src="https://chyyuu.gitbooks.io/ucore_os_docs/lab2_figs/image001.png"></center>
+<center><img src="http://116.62.148.220:8888/lab2_figs/image001.png"></center>
 
 在 preview.md 中已经分析了 boot_map_segment 函数，它通过调用 get_pte 实现地址映射。下面就按照 get_pte 函数的注释一行行实现：
 
