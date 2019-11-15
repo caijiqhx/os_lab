@@ -7,17 +7,22 @@
 #include <list.h>
 
 list_entry_t pra_list_head, *clock;
+uint32_t judge;
 
 static int
 _exclock_init_mm(struct mm_struct *mm) {
     list_init(&pra_list_head);
     clock = mm->sm_priv = &pra_list_head;
+    judge = 0;
     //cprintf(" mm->sm_priv %x in exclock_init_mm\n",mm->sm_priv);
     return 0;
 }
 
 static int
 _exclock_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, int swap_in) {
+    if(judge) {
+        return 0;
+    }
     list_entry_t *head = (list_entry_t*) mm->sm_priv;
     list_entry_t *entry = &(page->pra_page_link);
 
@@ -29,6 +34,7 @@ _exclock_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, 
 // 遍历循环链表找到要换出的页
 static int
 _exclock_swap_out_victim(struct mm_struct *mm, struct Page **ptr_page, int in_trick) {
+    judge = 1;
     list_entry_t *head = (list_entry_t*) mm->sm_priv;
     assert(clock != NULL);
     assert(in_trick == 0);
