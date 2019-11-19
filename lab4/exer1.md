@@ -49,3 +49,62 @@ struct context {
     uint32_t ebp;
 };
 ```
+
+./kern/process/switch.S 中的 switch_to 函数就是将八个寄存器保存到 from->context，从 to->context 中读取寄存器的值。然后通过 `push 0(%eax)` 将 to->context.eip 放到栈顶，ret 即 `pop eip` 让 eip 指向了 to 上次被打断的地方执行。
+
+还有就是 copy_thread 函数，有 `proc->context.eip = (uintptr_t)forkret; proc->context.esp = (uintptr_t)(proc->tf);` 即设置从 forkret 开始执行，对应的栈为 proc->tf。
+
+trapframe 结构体在 lab1 中已经见过了，保存了中断发生时进程的状态，用于恢复中断前的现场。
+
+tf 指向中断帧的位置，在此处被传给了 forkret
+
+```C
+static void
+forkret(void) {
+    forkrets(current->tf);
+}
+```
+
+forkret 定义在 trapentry.S 中，将 tf 指向的地址设置为新栈的地址，并跳转到了 \_\_trapret:
+
+```assembly
+.globl forkrets
+forkrets:
+    # set stack to this new process's trapframe
+    movl 4(%esp), %esp
+    jmp __trapret
+```
+
+\_\_trapret 利用 tf 指向的中断帧的值恢复了中断前的现场，（这里其实并不是因为中断发生的进程切换）：
+
+```assembly
+.globl __trapret
+__trapret:
+    # restore registers from stack
+    popal
+
+    # restore %ds, %es, %fs and %gs
+    popl %gs
+    popl %fs
+    popl %es
+    popl %ds
+
+    # get rid of the trap number and error code
+    addl $0x8, %esp
+    iret
+```
+
+在 kernel_thread 中设置了 tf->tf_eip 为 kernel_thread_entry，接下来执行的是：
+
+```assembly
+.globl kernel_thread_entry
+kernel_thread_entry:        # void kernel_thread(void)
+
+    pushl %edx              # push arg
+    call *%ebx              # call fn
+
+    pushl %eax              # save the return value of fn(arg)
+    call do_exit            # call do_exit to terminate current thread
+```
+
+即开始执行了指定的函数 fn。
