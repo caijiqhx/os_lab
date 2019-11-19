@@ -102,6 +102,10 @@ alloc_proc(void) {
      *       uint32_t flags;                             // Process flag
      *       char name[PROC_NAME_LEN + 1];               // Process name
      */
+        memset(proc, 0, sizeof(struct proc_struct));     // 结构体中的大多数成员变量在初始化时置 0 即可
+        proc->state = PROC_UNINIT;                       // 进程状态设置为 PROC_UNINIT，其实这个值本来就是 0，这句不写也行
+        proc->pid = -1;                                  // pid 赋值为 -1，表示进程尚不存在
+        proc->cr3 = boot_cr3;                            // 内核态进程的公用页目录表
     }
     return proc;
 }
