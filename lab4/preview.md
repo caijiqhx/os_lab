@@ -75,6 +75,78 @@ struct proc_struct {
 3. static list_entry_t hash_list[HASH_LIST_SIZE]：所有进程控制块的哈希表，proc_struct 中的成员变量 hash_link 将基于 pid 链接入这个哈希表中。
 4. list_entry_t proc_list：所有进程控制块的双向线性列表，proc_struct 中的成员变量 list_link 将链接入这个链表中。
 
-了解了 PCB 的结构，可以完成 练习 1。
+了解了 PCB 的结构，可以完成 练习 1，实现 alloc_proc 函数。
 
 ## 创建并执行内核线程
+
+alloc_proc 建立进程控制块后，就可以通过 pcb 来创建具体的进程/线程。
+
+首先要考虑最简单的内核进程，通常只是内核中的一小段代码或函数，没有自己的专属空间。ucore 已经对整个内核内存空间进行了管理，通过设置页表建立了内核虚拟空间（即 boot_cr3 指向的二级页表描述的空间）。所以内核中的所有线程都不需要再建立各自的页表，只需共享这个内核虚拟空间就可以访问整个物理内存了。从这个角度看，内核线程被 uCore 内核这个大“内核进程”所管理。
+
+### 创建第 0 个内核线程 idleproc
+
+在 kern_init 函数调用了 proc_init 函数，启动了创建内核线程的步骤。首先，当前的执行上下文就可以看成内核中一个内核进程的上下文，ucore 通过给当前执行的上下文分配一个进程控制块并初始化，作为第 0 个内核线程 initproc。proc_init 再进一步初始化：
+
+```C
+if ((idleproc = alloc_proc()) == NULL) {
+    panic("cannot alloc idleproc.\n");
+}
+
+idleproc->pid = 0;                              // 合法的 id，第 0 个内核线程
+idleproc->state = PROC_RUNNABLE;                // 可运行，等待调度
+idleproc->kstack = (uintptr_t)bootstack;        // 之后的内核线程的内核栈都需要通过分配获得
+idleproc->need_resched = 1;                     // idleproc 执行时应该由调度器切换其他进程执行
+set_proc_name(idleproc, "idle");
+nr_process ++;
+```
+
+由此，第 0 个内核线程就完成了。
+
+### 创建第 1 个内核线程 initproc
+
+第 0 个内核线程主要工作是完成内核中各个子系统的初始化，然后就执行 cpu_idle 函数：
+
+```C
+void
+cpu_idle(void) {
+    while (1) {
+        if (current->need_resched) {
+            schedule();
+        }
+    }
+}
+```
+
+ucore 还需创建其他进程来完成各种工作，idle_proc 调用 kernel_thread 函数创建一个内核线程 init_main，在 lab4 中，这个函数就是输出了几句话。在后续的实验中，这个内核线程的工作就是创建特定的其他内核线程或用户进程。
+
+```C
+// kernel_thread - create a kernel thread using "fn" function
+// NOTE: the contents of temp trapframe tf will be copied to
+//       proc->tf in do_fork-->copy_thread function
+int
+kernel_thread(int (*fn)(void *), void *arg, uint32_t clone_flags) {
+    struct trapframe tf;
+    memset(&tf, 0, sizeof(struct trapframe));
+    tf.tf_cs = KERNEL_CS;
+    tf.tf_ds = tf.tf_es = tf.tf_ss = KERNEL_DS;
+    tf.tf_regs.reg_ebx = (uint32_t)fn;
+    tf.tf_regs.reg_edx = (uint32_t)arg;
+    tf.tf_eip = (uint32_t)kernel_thread_entry;
+    return do_fork(clone_flags | CLONE_VM, 0, &tf);
+}
+```
+
+注意，kernel_thread 函数采用了局部变量 tf 来放置保存内核线程的临时中断帧，并把中断帧的指针传递给 do_fork 函数，而 do_fork 函数会调用 copy_thread 函数来在新创建的进程内核栈上专门给进程的中断帧分配一块空间。
+
+首先给 tf 进行清零初始化，并设置中断帧的代码段和数据段为内核空间的段，这实际上也说明了 initproc 内核线程在内核空间中执行。而 initproc 内核线程从 tf.tf_eip 指向的 kernel_thread_entry 开始执行：
+
+```assembly
+.globl kernel_thread_entry
+kernel_thread_entry:        # void kernel_thread(void)
+
+    pushl %edx              # push arg
+    call *%ebx              # call fn
+
+    pushl %eax              # save the return value of fn(arg)
+    call do_exit            # call do_exit to terminate current thread
+```
