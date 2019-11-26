@@ -150,3 +150,36 @@ kernel_thread_entry:        # void kernel_thread(void)
     pushl %eax              # save the return value of fn(arg)
     call do_exit            # call do_exit to terminate current thread
 ```
+
+kernel_thread_entry 函数主要为内核现场的主体 fn 函数设置一个准备开始和结束的壳，并把 fn 函数的参数 arg （保存在 edx 寄存器中）压栈，然后调用 fn 函数，把函数返回 eax 寄存器的内容压栈，调用 do_exit 函数退出线程执行。
+
+do_fork 是创建线程的主要函数，kernel_thread 函数通过调用 do_fork 函数最终完成了内核线程的创建工作。练习 2 就是要实现 do_fork 函数，这个函数主要做了如下的几件事：
+
+1. alloc_proc 函数，分配并初始化进程控制块；
+2. setup_stack 函数，分配并初始化内核栈；
+3. copy_mm 函数，根据 clone_flag 标志复制或共享进程内存管理结果；
+4. copy_thread 函数，设置进程在内核（将来也包括用户态）正常运行和调度所需的中断帧和执行上下文；
+5. 把设置好的进程控制块放入到 hash_list 和 proc_list 两个全局变量中；
+6. 进程已准备好，设置为就绪态；
+7. 返回子进程的 pid。
+
+如果前三步没有执行成功，则需要做相应的错误处理，把相关已经占有的内存释放。copy_thread 函数做的比较多：
+
+```C
+// copy_thread - setup the trapframe on the  process's kernel stack top and
+//             - setup the kernel entry point and stack of process
+static void
+copy_thread(struct proc_struct *proc, uintptr_t esp, struct trapframe *tf) {
+    // 在内核栈的顶部设置中断帧大小的空间，将 kernel_thread 中建立的临时中断帧复制到此
+    proc->tf = (struct trapframe *)(proc->kstack + KSTACKSIZE) - 1;
+    *(proc->tf) = *tf;
+    proc->tf->tf_regs.reg_eax = 0;          // 子进程/线程执行完 do_fork 后的返回值
+    proc->tf->tf_esp = esp;                 // 设置中断帧中的栈指针 esp
+    proc->tf->tf_eflags |= FL_IF;           // 使能中断
+
+    proc->context.eip = (uintptr_t)forkret;
+    proc->context.esp = (uintptr_t)(proc->tf);
+}
+```
+
+设置好中断帧后，最后就是设置 initproc 的进程上下文。只有设置好执行现场后，一旦 ucore 调度器选择了 initproc 执行，就需要根据 initproc->context 中保存的执行现场来恢复 initproc 的执行。这里设置了 initproc 的执行现场中主要的两个信息：上次停止执行时的下一条指令地址 context.eip 和上次停止执行时的堆栈地址 context.esp。其实 initproc 还没有执行过，所以这其实就是 initproc 实际执行的第一条指令地址和堆栈指针。可以看出，由于 initproc 的中断帧占用了实际给 initproc 分配的栈空间的顶部，所以 initproc 就只能把栈顶指针 context.esp 设置在 initproc 的中断帧的起始位置。根据 context.eip 的赋值，可以知道 initproc 实际开始执行的地方在 forkret 函数（主要完成 do_fork 函数返回的处理工作）处。至此，initproc 内核线程已经做好准备执行了。
