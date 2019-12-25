@@ -60,7 +60,7 @@ idt_init(void) {
         }
     }
     // 从trap.h 看到 系统调用对应是 0x80，系统调用应该对应用户态的软件权限
-    SETGATE(idt[T_SYSCALL], 0, GD_KTEXT, __vectors[i], DPL_USER);
+    SETGATE(idt[T_SYSCALL], 1, GD_KTEXT, __vectors[T_SYSCALL], DPL_USER);
     // 从用户态到内核态的trap需要设置为3
     SETGATE(idt[T_SWITCH_TOK], 1, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
     lidt(&idt_pd);
