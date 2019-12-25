@@ -54,5 +54,13 @@ do_exit 在 preview 中也分析过了，它负责回收当前进程的绝大部
 ## Q2: 请给出 ucore 中一个用户态进程的执行状态生命周期图
 
 ```shell
-alloc_proc
+[NOT EXIST]                             [PROC_RUNNING]
+    |                                          ⬆
+alloc_proc                                  proc_run
+    ⬇                                          ⬇
+[PROC_UINIT] --wakeup_proc/proc_init--> [PROC_RUNNABLE] --do_exit
+                                            |   ⬆                \\
+                    free_page/do_wait/do_sleep  wakeup_proc      [PROC_ZOMBIE]
+                                            ⬇   |                //
+                                        [PROC_SLEEPING] --do_exit
 ```

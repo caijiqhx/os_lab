@@ -23,3 +23,5 @@ ucore 中的一些系统调用：
 | SYS_getpid | get the process's pid                     |                                                                                |
 
 犯了个巨蠢的错误。。。在 trap.c 中设置系统调用的中断描述符时，写成了 `SETGATE(idt[T_SYSCALL], 1, GD_KTEXT, __vectors[i], DPL_USER);` 。。。导致 grade 的时候一顿报错，最后一点点比对才发现，视力是个好东西
+
+challenge
